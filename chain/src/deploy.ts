@@ -9,8 +9,8 @@ import { setNetworkId } from "@midnight-ntwrk/midnight-js-network-id";
 import { CompiledContract } from "@midnight-ntwrk/midnight-js-protocol/compact-js";
 import type { EnvironmentConfiguration } from "@midnight-ntwrk/testkit-js";
 import pino from "pino";
-import { firstValueFrom, throwError } from "rxjs";
-import { filter, take, tap, timeout } from "rxjs/operators";
+import { firstValueFrom } from "rxjs";
+import { take } from "rxjs/operators";
 import { Contract, ledger, pureCircuits } from "../../contract/managed/mandate/contract/index.js";
 import { localConfig } from "./config.js";
 import { buildProviders, type MandateProviders } from "./providers.js";
@@ -103,6 +103,61 @@ async function expectReject(name: string, run: () => Promise<unknown>): Promise<
   throw new Error(`${name} was accepted`);
 }
 
+function dustBalance(state: { dust: { balance: (at: Date) => bigint } }, at: Date): bigint {
+  try {
+    return state.dust.balance(at);
+  } catch (error) {
+    logger.warn(`dust balance unreadable: ${error instanceof Error ? error.message : String(error)}`);
+    return 0n;
+  }
+}
+
+function nightSummary(state: { unshielded?: { availableCoins?: unknown[] } }): string {
+  const coins = state.unshielded?.availableCoins ?? [];
+  let stars = 0n;
+  let registered = 0;
+  for (const coin of coins) {
+    if (!coin || typeof coin !== "object") continue;
+    const record = coin as {
+      value?: bigint;
+      registeredForDustGeneration?: boolean;
+      utxo?: { value?: bigint; registeredForDustGeneration?: boolean };
+    };
+    const value = typeof record.value === "bigint" ? record.value : record.utxo?.value;
+    if (typeof value === "bigint") stars += value;
+    if (record.registeredForDustGeneration || record.utxo?.registeredForDustGeneration) registered += 1;
+  }
+  return `nightCoins=${coins.length} registered=${registered} stars=${stars}`;
+}
+
+// Genesis NIGHT creates dust coins before they can pay a fee. balance(now)
+// is the spendable amount. A coin count of 1 is not enough for this deploy.
+async function waitForDust(wallet: MidnightWalletProvider["wallet"]): Promise<void> {
+  const deadline = Date.now() + 10 * 60_000;
+  let firstPositiveAt = 0;
+  while (Date.now() < deadline) {
+    const state = await firstValueFrom(wallet.state().pipe(take(1)));
+    const now = new Date();
+    const soon = new Date(now.getTime() + 180_000);
+    const nowBalance = dustBalance(state, now);
+    const soonBalance = dustBalance(state, soon);
+    logger.info(
+      `${nightSummary(state)} dustCoins=${state.dust.availableCoins.length} dustNow=${nowBalance} dustIn180s=${soonBalance}`,
+    );
+    if (nowBalance > 0n && firstPositiveAt === 0) firstPositiveAt = Date.now();
+    const grew = firstPositiveAt !== 0 && Date.now() - firstPositiveAt >= 90_000;
+    const alreadyCapped = nowBalance > 0n && soonBalance <= nowBalance;
+    if (grew || alreadyCapped) return;
+    await new Promise((resolve) => setTimeout(resolve, 15_000));
+  }
+  throw new Error("DUST balance stayed at 0 for 10 minutes");
+}
+
+function dustShort(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("could not balance dust") || message.includes("InsufficientFunds");
+}
+
 async function main() {
   const config = localConfig();
   setNetworkId(config.networkId);
@@ -127,26 +182,27 @@ async function main() {
   await wallet.start();
   try {
     await syncWallet(logger, wallet.wallet, 6 * 60_000);
-    await firstValueFrom(
-      wallet.wallet.state().pipe(
-        tap((state) => logger.info(`dust coins=${state.dust.availableCoins.length}`)),
-        filter((state) => state.dust.availableCoins.length >= 1),
-        take(1),
-        timeout({
-          each: 180_000,
-          with: () => throwError(() => new Error("No spendable DUST coin within 180s")),
-        }),
-      ),
-    );
+    await waitForDust(wallet.wallet);
     const providers = buildProviders(wallet, zkConfigPath, config);
     const agentKey = pureCircuits.agentPublicKey(session.agentSecret);
 
     logger.info("Deploying Mandate");
-    const deployed = await deployContract(providers, {
-      compiledContract: compiled,
-      privateStateId: PRIVATE_STATE_ID,
-      initialPrivateState,
-    });
+    let deployed: Awaited<ReturnType<typeof deployContract>> | undefined;
+    for (let attempt = 1; attempt <= 6; attempt += 1) {
+      try {
+        deployed = await deployContract(providers, {
+          compiledContract: compiled,
+          privateStateId: PRIVATE_STATE_ID,
+          initialPrivateState,
+        });
+        break;
+      } catch (error) {
+        if (!dustShort(error) || attempt === 6) throw error;
+        logger.info(`deploy attempt ${attempt} needs more DUST: ${error instanceof Error ? error.message : String(error)}`);
+        await new Promise((resolve) => setTimeout(resolve, 30_000));
+      }
+    }
+    if (!deployed) throw new Error("Deploy did not return a contract");
     contractAddress = deployed.deployTxData.public.contractAddress;
     logger.info(`CONTRACT_ADDRESS=${contractAddress}`);
     steps.push({ name: "deploy", ok: true });
