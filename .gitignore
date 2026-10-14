@@ -1,0 +1,6 @@
+node_modules
+.next
+contract/managed
+*.log
+.env
+.env.local

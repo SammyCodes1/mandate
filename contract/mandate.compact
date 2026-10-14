@@ -1,0 +1,183 @@
+// Mandate: a private spending policy for an AI agent.
+//
+// Public ledger: company key, agent key, terms commitment, purse commitment,
+// nullifiers, and one commitment per receipt. Amounts, recipients, caps, and
+// the remaining budget never land on the ledger.
+//
+// Compile with Compact toolchain 0.31.1 (language 0.23, runtime 0.16.0).
+// That is the toolchain the public Preprod network accepts. Toolchain 0.35
+// targets ledger 9 and will not deploy there.
+//
+// SPDX-License-Identifier: Apache-2.0
+
+pragma language_version 0.23;
+
+import CompactStandardLibrary;
+
+export enum MandateStatus {
+  ABSENT,
+  ACTIVE,
+  REVOKED
+}
+
+export struct Terms {
+  perPaymentCap: Uint<64>,
+  totalCap: Uint<64>,
+  maxPayments: Uint<64>,
+  recipients: Vector<4, Bytes<32>>
+}
+
+export struct Purse {
+  spent: Uint<64>,
+  payments: Uint<64>
+}
+
+export struct Receipt {
+  amount: Uint<64>,
+  recipient: Bytes<32>
+}
+
+export struct CreateOpening {
+  terms: Terms,
+  termsSalt: Bytes<32>,
+  purseSalt: Bytes<32>
+}
+
+export struct SpendOpening {
+  terms: Terms,
+  termsSalt: Bytes<32>,
+  purse: Purse,
+  purseSalt: Bytes<32>,
+  nextPurseSalt: Bytes<32>,
+  receiptSalt: Bytes<32>
+}
+
+export ledger status: MandateStatus;
+export ledger companyKey: Bytes<32>;
+export ledger agentKey: Bytes<32>;
+export ledger termsCommitment: Bytes<32>;
+export ledger purseCommitment: Bytes<32>;
+export ledger nullifiers: Set<Bytes<32>>;
+export ledger receipts: Map<Uint<64>, Bytes<32>>;
+export ledger receiptCount: Counter;
+
+witness companySecret(): Bytes<32>;
+witness agentSecret(): Bytes<32>;
+witness createOpening(): CreateOpening;
+witness spendOpening(): SpendOpening;
+
+constructor() {
+  status = MandateStatus.ABSENT;
+}
+
+// Domain-separated key. The secret stays in the witness.
+// The same secret in another app produces a different key because of the label.
+circuit keyFor(purpose: Bytes<32>, secret: Bytes<32>): Bytes<32> {
+  return persistentHash<Vector<2, Bytes<32>>>([purpose, secret]);
+}
+
+export circuit agentPublicKey(secret: Bytes<32>): Bytes<32> {
+  return keyFor(pad(32, "mandate:agent:"), secret);
+}
+
+export circuit companyPublicKey(secret: Bytes<32>): Bytes<32> {
+  return keyFor(pad(32, "mandate:company:"), secret);
+}
+
+// Auditor check. Returns the commitment the ledger stores for one receipt.
+// The amount and recipient are arguments the auditor already holds.
+// Nothing is written.
+export circuit receiptCommitment(
+  amount: Uint<64>,
+  recipient: Bytes<32>,
+  salt: Bytes<32>
+): Bytes<32> {
+  return persistentCommit<Receipt>(Receipt { amount: amount, recipient: recipient }, salt);
+}
+
+circuit emptyRecipient(): Bytes<32> {
+  return pad(32, "");
+}
+
+// Company registers the agent's public key and commits to the terms and a
+// zero purse. The terms themselves stay in the witness.
+export circuit createMandate(agentKeyArg: Bytes<32>): [] {
+  assert(status == MandateStatus.ABSENT, "Mandate already exists");
+
+  const opening = createOpening();
+  assert(opening.terms.perPaymentCap > 0, "Per-payment cap must be positive");
+  assert(opening.terms.totalCap >= opening.terms.perPaymentCap, "Total cap is below the per-payment cap");
+  assert(opening.terms.maxPayments > 0, "Payment allowance must be positive");
+  // Both caps sit under 2^63 so spent + amount cannot wrap a Uint<64>.
+  assert(opening.terms.totalCap < 9223372036854775808, "Total cap is outside the safe range");
+
+  companyKey = disclose(keyFor(pad(32, "mandate:company:"), companySecret()));
+  agentKey = disclose(agentKeyArg);
+  termsCommitment = persistentCommit<Terms>(opening.terms, opening.termsSalt);
+  purseCommitment = persistentCommit<Purse>(Purse { spent: 0, payments: 0 }, opening.purseSalt);
+  status = MandateStatus.ACTIVE;
+}
+
+// Agent spends. A failed assert writes nothing, so a rejected payment
+// leaves no trace of the amount or the recipient.
+export circuit spend(amount: Uint<64>, recipient: Bytes<32>): [] {
+  assert(status == MandateStatus.ACTIVE, "Mandate is not active");
+  assert(agentKey == keyFor(pad(32, "mandate:agent:"), agentSecret()), "Wrong agent");
+
+  const opening = spendOpening();
+  assert(
+    termsCommitment == persistentCommit<Terms>(opening.terms, opening.termsSalt),
+    "Terms do not match the mandate"
+  );
+  assert(
+    purseCommitment == persistentCommit<Purse>(opening.purse, opening.purseSalt),
+    "Purse does not match the mandate"
+  );
+  // The public counter and the private purse have to name the same payment.
+  assert(opening.purse.payments == receiptCount, "Purse count does not match the public sequence");
+
+  assert(amount > 0, "Amount must be positive");
+  assert(amount <= opening.terms.perPaymentCap, "Payment exceeds the per-payment cap");
+  assert(opening.purse.spent <= opening.terms.totalCap, "Purse is already over the mandate");
+  assert(opening.purse.spent + amount <= opening.terms.totalCap, "Payment exceeds the mandate total");
+  assert(opening.purse.payments < opening.terms.maxPayments, "Mandate payment count is exhausted");
+
+  assert(recipient != emptyRecipient(), "Recipient is empty");
+  assert(
+    recipient == opening.terms.recipients[0] ||
+    recipient == opening.terms.recipients[1] ||
+    recipient == opening.terms.recipients[2] ||
+    recipient == opening.terms.recipients[3],
+    "Recipient is outside the mandate"
+  );
+
+  const tag = opening.purse.payments as Field as Bytes<32>;
+  const nullifier = disclose(persistentHash<Vector<2, Bytes<32>>>([
+    pad(32, "mandate:nullifier:"),
+    tag
+  ]));
+  assert(!nullifiers.member(nullifier), "Spend was already used");
+  nullifiers.insert(nullifier);
+
+  const nextPurse = Purse {
+    spent: opening.purse.spent + amount,
+    payments: opening.purse.payments + 1
+  };
+  purseCommitment = persistentCommit<Purse>(nextPurse, opening.nextPurseSalt);
+
+  const index = opening.purse.payments;
+  receipts.insert(
+    disclose(index),
+    persistentCommit<Receipt>(Receipt { amount: amount, recipient: recipient }, opening.receiptSalt)
+  );
+  receiptCount.increment(1);
+}
+
+export circuit revoke(): [] {
+  assert(status == MandateStatus.ACTIVE, "Mandate is not active");
+  assert(
+    companyKey == keyFor(pad(32, "mandate:company:"), companySecret()),
+    "Wrong company"
+  );
+  status = MandateStatus.REVOKED;
+}

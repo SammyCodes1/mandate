@@ -1,0 +1,33 @@
+name: compile
+
+on:
+  push:
+    paths:
+      - "contract/**"
+      - ".github/workflows/compile.yml"
+  workflow_dispatch:
+
+jobs:
+  compact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Compact 0.31.1
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf https://github.com/midnightntwrk/compact/releases/latest/download/compact-installer.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Pin the Preprod toolchain
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          compact update 0.31.1
+          compact compile --version
+      - name: Compile mandate
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          compact compile contract/mandate.compact contract/managed/mandate
+          test -f contract/managed/mandate/contract/index.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mandate-compact
+          path: contract/managed/mandate
+          if-no-files-found: error
