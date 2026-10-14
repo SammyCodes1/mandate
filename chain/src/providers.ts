@@ -17,7 +17,8 @@ export function buildProviders(
   return {
     privateStateProvider: levelPrivateStateProvider({
       privateStateStoreName: `mandate-private-${Date.now()}`,
-      privateStoragePasswordProvider: () => "mandate-local-devnet",
+      // Local test constant. midnight-js requires 3 of upper, lower, digit, special.
+      privateStoragePasswordProvider: () => "Mandate-local-1",
       accountId: wallet.getCoinPublicKey(),
     }),
     publicDataProvider: indexerPublicDataProvider(config.indexer, config.indexerWS),
