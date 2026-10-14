@@ -56,8 +56,62 @@ jobs:
         working-directory: chain
         run: node dist/simulate.js
 
+      # The node answers /health before it has produced block 1. The indexer
+      # then exits with "block number 1 not found". Wait for a real block,
+      # and start the indexer again if that race still wins.
       - name: Start the local devnet
-        run: docker compose -p mandate -f chain/compose.yml up -d --wait
+        run: |
+          compose="docker compose -p mandate -f chain/compose.yml"
+          $compose up -d node proof-server
+          echo "waiting for the node"
+          node_up=0
+          for _ in $(seq 1 40); do
+            if curl -sf http://127.0.0.1:9944/health >/dev/null; then
+              node_up=1
+              break
+            fi
+            sleep 3
+          done
+          test "$node_up" -eq 1
+          echo "waiting for block 1"
+          block_ready=0
+          for _ in $(seq 1 40); do
+            header=$(curl -sf -H 'content-type: application/json' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"chain_getHeader","params":[]}' \
+              http://127.0.0.1:9944 || true)
+            echo "$header"
+            case "$header" in
+              *'"number":"0x0"'*) ;;
+              *'"number":"0x'*) block_ready=1; break ;;
+            esac
+            sleep 3
+          done
+          test "$block_ready" -eq 1
+          echo "waiting for the proof server"
+          proof_up=0
+          for _ in $(seq 1 30); do
+            if echo > /dev/tcp/127.0.0.1/6300; then
+              proof_up=1
+              break
+            fi
+            sleep 3
+          done
+          test "$proof_up" -eq 1
+          $compose up -d indexer
+          echo "waiting for the indexer"
+          for attempt in 1 2 3 4 5 6 7 8; do
+            sleep 8
+            state=$(docker inspect -f '{{.State.Status}}' mandate-indexer-1)
+            echo "indexer attempt ${attempt}: ${state}"
+            if [ "$state" = "running" ] && $compose exec -T indexer cat /var/run/indexer-standalone/running >/dev/null 2>&1; then
+              echo "indexer is up"
+              exit 0
+            fi
+            $compose logs --no-color --tail 80 indexer || true
+            $compose start indexer || true
+          done
+          $compose logs --no-color --tail 160 indexer node || true
+          exit 1
 
       - name: Deploy and call the contract
         working-directory: chain
