@@ -24,8 +24,13 @@ Do not claim a Preprod address until a deploy receipt exists.
 
 ## Repo checklist
 
-- Apache-2.0 license on the GitHub repo
+- Public repo: https://github.com/SammyCodes1/mandate
+- Apache-2.0 license
 - Topic: `midnightntwrk`
 - `contract/mandate.compact` in the repo
-- Compiled output attached or linked once `npm run compile` has been run
-- This deck and the video URL on the AKINDO submission
+- Compiled output: the `mandate-compact` artifact from [the compile workflow](https://github.com/SammyCodes1/mandate/actions/workflows/compile.yml) and from [the chain workflow](https://github.com/SammyCodes1/mandate/actions/workflows/chain.yml)
+- Deck: `slides/Mandate.pptx`
+- Silent console walkthrough: `slides/demo.webm`. The voiceover for it is the 90-second script above. The console uses the local stand-in, and the footer says so.
+- Chain transcript: the `mandate-transcript` artifact, once `chain.yml` is green. That address is the local devnet. It is not a Preview or Preprod address.
+
+AKINDO still needs the account holder to paste the repo, the deck, and the video. This repo cannot file that form.
