@@ -1,0 +1,74 @@
+{
+  "network": "undeployed",
+  "networkNote": "Local Midnight devnet started by chain/compose.yml. This address is not on Preview or Preprod and cannot be opened in a public explorer.",
+  "images": {
+    "node": "midnightntwrk/midnight-node:1.0.0",
+    "indexer": "midnightntwrk/indexer-standalone:4.3.3",
+    "proofServer": "midnightntwrk/proof-server:8.1.0"
+  },
+  "toolchain": "0.31.1",
+  "compactRuntime": "0.16.0",
+  "contractAddress": "6eb77a70044e4992e0b55c56285b49b4711455e75067132851da8d4d237d1beb",
+  "steps": [
+    {
+      "name": "deploy",
+      "ok": true
+    },
+    {
+      "name": "createMandate",
+      "ok": true,
+      "status": "1",
+      "nullifiers": "0",
+      "receipts": "0"
+    },
+    {
+      "name": "spend80",
+      "ok": true,
+      "nullifiers": "1",
+      "receipts": "1",
+      "status": "1"
+    },
+    {
+      "name": "spend150",
+      "ok": false,
+      "error": "Unexpected error executing scoped transaction '<unnamed>': Error: failed assert: Payment exceeds the per-payment cap",
+      "nullifiers": "1"
+    },
+    {
+      "name": "replay",
+      "ok": false,
+      "error": "Unexpected error executing scoped transaction '<unnamed>': Error: failed assert: Purse does not match the mandate",
+      "nullifiers": "1"
+    },
+    {
+      "name": "wrongAgent",
+      "ok": false,
+      "error": "Unexpected error executing scoped transaction '<unnamed>': Error: failed assert: Wrong agent",
+      "nullifiers": "1"
+    },
+    {
+      "name": "revoke",
+      "ok": true,
+      "status": "2",
+      "nullifiers": "1",
+      "receipts": "1"
+    }
+  ],
+  "ledgerFinal": {
+    "status": 2,
+    "companyKey": "e144e249127aecf6b9fdf847876459119e522a6d9879e2e2a6ea536756b61772",
+    "agentKey": "5e1fadc1ad16c650f7083e6ffd34a2a20e7a75ab75aed7e96a8133451c5dd1ba",
+    "termsCommitment": "ac6f2c93e2ba76f543b3a9a09bf37de56e22c74cc8a42fe3af86695a366d14c6",
+    "purseCommitment": "d1046fedb01b462c9dbefb7cf56a21e578d914848ea610623c4509903728c3e0",
+    "nullifiers": [
+      "e8fd32e6b0d2678ccbc11576be237707bada2f59debaeab50322b53287704115"
+    ],
+    "receipts": [
+      {
+        "index": "0",
+        "commitment": "f85b9bea430c849f8b0b394b1235d250c9b409db4703d5905f18ddf399c87dcc"
+      }
+    ],
+    "receiptCount": "1"
+  }
+}

@@ -2,7 +2,7 @@
 
 Deadline: 17 October 2026. Pool: 4,000 USDT. Each wave is scored on its own.
 
-Do not claim a Preprod address until a deploy receipt exists.
+Do not claim a Preview or Preprod address. The local devnet address from [run 38522751539](https://github.com/SammyCodes1/mandate/actions/runs/38522751539) is `6eb77a70044e4992e0b55c56285b49b4711455e75067132851da8d4d237d1beb`. The devnet is destroyed when the job ends. A public explorer cannot open it.
 
 ## Slides
 
@@ -31,6 +31,6 @@ Do not claim a Preprod address until a deploy receipt exists.
 - Compiled output: the `mandate-compact` artifact from [the compile workflow](https://github.com/SammyCodes1/mandate/actions/workflows/compile.yml) and from [the chain workflow](https://github.com/SammyCodes1/mandate/actions/workflows/chain.yml)
 - Deck: `slides/Mandate.pptx`
 - Silent console walkthrough: `slides/demo.webm`. The voiceover for it is the 90-second script above. The console uses the local stand-in, and the footer says so.
-- Chain transcript: the `mandate-transcript` artifact, once `chain.yml` is green. That address is the local devnet. It is not a Preview or Preprod address.
+- Chain transcript: `transcript.json` in this repo, and the `mandate-transcript` artifact on [run 38522751539](https://github.com/SammyCodes1/mandate/actions/runs/38522751539). The run accepted `createMandate` and a payment of 80, rejected a payment of 150, a replay, and the wrong agent, then accepted `revoke`. The address is the local devnet. It is not a Preview or Preprod address.
 
 AKINDO still needs the account holder to paste the repo, the deck, and the video. This repo cannot file that form.

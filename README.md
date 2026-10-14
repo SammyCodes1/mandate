@@ -28,9 +28,13 @@ Compact publishes Linux and macOS binaries only. This repo compiles on GitHub Ac
 
 `chain/src/simulate.ts` loads that output and runs the circuits in `@midnight-ntwrk/compact-runtime` 0.16.0. It checks the under-cap payment, the over-cap rejection, the replay, the wrong agent, an outsider recipient, and revoke. No proof server is involved. The commitments in that run are Midnight `persistentCommit` values.
 
-`chain/src/deploy.ts` is the chain run. GitHub Actions starts the official local devnet (`midnightntwrk/midnight-node:1.0.0`, indexer `4.3.3`, proof server `8.1.0`) and deploys with the well-known devnet seed. The workflow is `.github/workflows/chain.yml`. The transcript artifact is `mandate-transcript`.
+`chain/src/deploy.ts` is the chain run. GitHub Actions starts the official local devnet (`midnightntwrk/midnight-node:1.0.0`, indexer `4.3.3`, proof server `8.1.0`) and deploys with the well-known devnet seed. The workflow is `.github/workflows/chain.yml`. The green run is [38522751539](https://github.com/SammyCodes1/mandate/actions/runs/38522751539). The transcript artifact on that run is `mandate-transcript`, and a copy is `transcript.json`.
 
-That address belongs to the runner's devnet. It is not on Preview or Preprod, and a public explorer cannot open it. Preprod's hosted RPC now requires a Blockfrost project id, which this repo does not have. Preview's faucet is a captcha page, so an unattended runner cannot fund a wallet there.
+The contract address from that run is `6eb77a70044e4992e0b55c56285b49b4711455e75067132851da8d4d237d1beb`.
+
+On that devnet the contract accepted `createMandate` and a payment of 80 (one nullifier, one receipt), rejected a payment of 150 (`Payment exceeds the per-payment cap`), rejected a replay (`Purse does not match the mandate`), rejected the wrong agent (`Wrong agent`), and then accepted `revoke`.
+
+That address belongs to the runner's devnet. The devnet is destroyed when the job ends. It is not on Preview or Preprod, and a public explorer cannot open it. Preprod's hosted RPC now requires a Blockfrost project id, which this repo does not have. Preview's faucet is a captcha page, so an unattended runner cannot fund a wallet there.
 
 Pin the runtime to 0.16.0. Midnight.js 4.1.1 and Compact.js 2.5.1 expect that runtime. Toolchain 0.35 targets ledger 9 and will not deploy on the public networks.
 
@@ -46,7 +50,9 @@ mv chain/node_modules node_modules
 cd chain
 ../node_modules/.bin/tsc -p tsconfig.build.json --noCheck
 node dist/simulate.js
-docker compose -f compose.yml up -d --wait
+# Start the devnet with the block-1 wait in .github/workflows/chain.yml.
+# docker compose -f compose.yml up -d --wait exits: the node answers
+# /health before block 1 exists, and the indexer then quits.
 node dist/deploy.js
 ```
 
