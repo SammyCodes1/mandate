@@ -160,8 +160,8 @@ export circuit spend(amount: Uint<64>, recipient: Bytes<32>): [] {
   nullifiers.insert(nullifier);
 
   const nextPurse = Purse {
-    spent: opening.purse.spent + amount,
-    payments: opening.purse.payments + 1
+    spent: (opening.purse.spent + amount) as Uint<64>,
+    payments: (opening.purse.payments + 1) as Uint<64>
   };
   purseCommitment = persistentCommit<Purse>(nextPurse, opening.nextPurseSalt);
 
