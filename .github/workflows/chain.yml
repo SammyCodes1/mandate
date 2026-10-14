@@ -1,0 +1,68 @@
+name: chain
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "contract/**"
+      - "chain/**"
+      - ".github/workflows/chain.yml"
+
+jobs:
+  local-devnet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Compact 0.31.1
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf https://github.com/midnightntwrk/compact/releases/latest/download/compact-installer.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Compile mandate
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          compact update 0.31.1
+          compact compile --version
+          compact compile contract/mandate.compact contract/managed/mandate
+          test -f contract/managed/mandate/contract/index.js
+
+      - name: Install the chain runner
+        working-directory: chain
+        run: npm install
+
+      - name: Run the circuits in the Compact runtime
+        working-directory: chain
+        run: npm run simulate
+
+      - name: Start the local devnet
+        run: docker compose -p mandate -f chain/compose.yml up -d --wait
+
+      - name: Deploy and call the contract
+        working-directory: chain
+        run: npm run deploy
+
+      - name: Upload the transcript
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mandate-transcript
+          path: chain/transcript.json
+          if-no-files-found: ignore
+
+      - name: Upload the compiled contract
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mandate-compact
+          path: contract/managed/mandate
+          if-no-files-found: error
+
+      - name: Stop the local devnet
+        if: always()
+        run: docker compose -p mandate -f chain/compose.yml down -v

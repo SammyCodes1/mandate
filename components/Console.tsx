@@ -244,7 +244,7 @@ export function Console() {
           <LedgerRow label="Receipts" value={String(ledger?.receiptCount ?? 0n)} />
         </dl>
         <p className="mt-3 text-[12px] leading-relaxed text-[#b7b1a6]">
-          Local rules, SHA-style stand-in commitments. The Compact source is contract/mandate.compact. Preprod deploy needs Compact 0.31.1, which ships as a Linux binary.
+          Local rules and a stand-in commitment. The Compact contract is compiled with toolchain 0.31.1 in GitHub Actions. This screen is not a Midnight proof.
         </p>
       </section>
     </div>

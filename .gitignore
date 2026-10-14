@@ -4,3 +4,4 @@ contract/managed
 *.log
 .env
 .env.local
+chain/mandate-private-*
