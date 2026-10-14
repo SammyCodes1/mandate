@@ -41,6 +41,9 @@ compact update 0.31.1
 compact compile contract/mandate.compact contract/managed/mandate
 cd chain
 npm install
+cd ..
+ln -s chain/node_modules node_modules
+cd chain
 npm run simulate
 docker compose -f compose.yml up -d --wait
 npm run deploy
