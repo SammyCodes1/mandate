@@ -36,22 +36,27 @@ jobs:
         working-directory: chain
         run: npm install
 
-      # The compiled contract lives outside chain/ and resolves packages by
-      # walking up to the repo root. One symlink keeps that walk on the same
-      # compact-runtime copy Midnight.js loads, which deploy requires.
-      - name: Share one Midnight runtime with the compiled contract
-        run: ln -s chain/node_modules node_modules
+      # A symlink makes Node load compact-runtime twice, and ContractState
+      # then fails its own instanceof check. Move the tree so the compiled
+      # contract and the tests resolve the same real path.
+      - name: Hoist one Midnight runtime to the repo root
+        run: |
+          mv chain/node_modules node_modules
+          copies=$(find node_modules -name package.json -path '*@midnight-ntwrk/onchain-runtime-v3/package.json' | wc -l)
+          echo "onchain-runtime-v3 copies: ${copies}"
+          find node_modules -name package.json -path '*@midnight-ntwrk/onchain-runtime-v3/package.json'
+          test "${copies}" -eq 1
 
       - name: Run the circuits in the Compact runtime
         working-directory: chain
-        run: npm run simulate
+        run: ../node_modules/.bin/tsx src/simulate.ts
 
       - name: Start the local devnet
         run: docker compose -p mandate -f chain/compose.yml up -d --wait
 
       - name: Deploy and call the contract
         working-directory: chain
-        run: npm run deploy
+        run: ../node_modules/.bin/tsx src/deploy.ts
 
       - name: Upload the transcript
         if: always()

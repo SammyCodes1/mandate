@@ -42,11 +42,11 @@ compact compile contract/mandate.compact contract/managed/mandate
 cd chain
 npm install
 cd ..
-ln -s chain/node_modules node_modules
+mv chain/node_modules node_modules
 cd chain
-npm run simulate
+../node_modules/.bin/tsx src/simulate.ts
 docker compose -f compose.yml up -d --wait
-npm run deploy
+../node_modules/.bin/tsx src/deploy.ts
 ```
 
 ## Circuits
