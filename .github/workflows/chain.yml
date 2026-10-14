@@ -36,9 +36,10 @@ jobs:
         working-directory: chain
         run: npm install
 
-      # A symlink makes Node load compact-runtime twice, and ContractState
-      # then fails its own instanceof check. Move the tree so the compiled
-      # contract and the tests resolve the same real path.
+      # One directory is not enough. tsx evaluates the wasm runtime again,
+      # and ContractState then fails instanceof inside createCircuitContext.
+      # Hoist the tree, compile the runner to plain JavaScript, and run it
+      # with node so the contract and the tests share one module instance.
       - name: Hoist one Midnight runtime to the repo root
         run: |
           mv chain/node_modules node_modules
@@ -47,16 +48,20 @@ jobs:
           find node_modules -name package.json -path '*@midnight-ntwrk/onchain-runtime-v3/package.json'
           test "${copies}" -eq 1
 
+      - name: Compile the chain runner
+        working-directory: chain
+        run: ../node_modules/.bin/tsc -p tsconfig.build.json --noCheck
+
       - name: Run the circuits in the Compact runtime
         working-directory: chain
-        run: ../node_modules/.bin/tsx src/simulate.ts
+        run: node dist/simulate.js
 
       - name: Start the local devnet
         run: docker compose -p mandate -f chain/compose.yml up -d --wait
 
       - name: Deploy and call the contract
         working-directory: chain
-        run: ../node_modules/.bin/tsx src/deploy.ts
+        run: node dist/deploy.js
 
       - name: Upload the transcript
         if: always()

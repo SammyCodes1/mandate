@@ -44,9 +44,10 @@ npm install
 cd ..
 mv chain/node_modules node_modules
 cd chain
-../node_modules/.bin/tsx src/simulate.ts
+../node_modules/.bin/tsc -p tsconfig.build.json --noCheck
+node dist/simulate.js
 docker compose -f compose.yml up -d --wait
-../node_modules/.bin/tsx src/deploy.ts
+node dist/deploy.js
 ```
 
 ## Circuits

@@ -38,12 +38,13 @@ function reject(run: () => unknown, label: string): string {
 const session = createSession();
 const contract = new Contract(witnessesFor(session));
 const ctor = contract.initialState(RT.createConstructorContext(initialPrivateState, COIN));
-let ctx = RT.createCircuitContext(
-  RT.sampleContractAddress(),
-  COIN,
-  ctor.currentContractState,
-  initialPrivateState,
-);
+const contractState = ctor.currentContractState;
+if (!(contractState instanceof RT.ContractState)) {
+  fail(
+    `ContractState comes from a second compact-runtime copy (${import.meta.resolve("@midnight-ntwrk/compact-runtime")})`,
+  );
+}
+let ctx = RT.createCircuitContext(RT.sampleContractAddress(), COIN, contractState, initialPrivateState);
 
 const absent = ledger(ctx.currentQueryContext.state);
 assert(absent.status === 0, `expected ABSENT, got ${absent.status}`);

@@ -7,8 +7,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "simulate": "tsx src/simulate.ts",
-    "deploy": "tsx src/deploy.ts"
+    "simulate": "tsc -p tsconfig.build.json --noCheck && node dist/simulate.js",
+    "deploy": "tsc -p tsconfig.build.json --noCheck && node dist/deploy.js"
   },
   "dependencies": {
     "@midnight-ntwrk/compact-runtime": "0.16.0",
@@ -29,7 +29,6 @@
     "ws": "^8.18.3"
   },
   "devDependencies": {
-    "tsx": "^4.20.5",
     "typescript": "^5.9.2"
   },
   "overrides": {

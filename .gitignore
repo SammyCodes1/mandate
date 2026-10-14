@@ -5,3 +5,4 @@ contract/managed
 .env
 .env.local
 chain/mandate-private-*
+chain/dist
